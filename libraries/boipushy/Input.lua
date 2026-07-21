@@ -16,6 +16,48 @@ Input.all_keys = {
     "dpdown", "dpleft", "dpright", "leftx", "lefty", "rightx", "righty",
 }
 
+-- LÖVE 11.5의 love.keyboard.isDown()은 게임패드 가상 키나 알 수 없는 키 이름을
+-- 받으면 "Invalid key constant" 에러를 던진다. 키보드/마우스가 이해할 수 있는
+-- 키만 화이트리스트로 두고 그 외에는 isDown 호출을 건너뛴다.
+Input.keyboard_keys = {
+    [" "] = true, ["return"] = true, ["escape"] = true, ["backspace"] = true, ["tab"] = true, ["space"] = true,
+    ["!"] = true, ["\""] = true, ["#"] = true, ["$"] = true, ["&"] = true, ["'"] = true,
+    ["("] = true, [")"] = true, ["*"] = true, ["+"] = true, [","] = true, ["-"] = true, ["."] = true, ["/"] = true,
+    ["0"] = true, ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true, ["5"] = true,
+    ["6"] = true, ["7"] = true, ["8"] = true, ["9"] = true,
+    [":"] = true, [";"] = true, ["<"] = true, ["="] = true, [">"] = true, ["?"] = true,
+    ["@"] = true, ["["] = true, ["\\"] = true, ["]"] = true, ["^"] = true, ["_"] = true, ["`"] = true,
+    ["a"] = true, ["b"] = true, ["c"] = true, ["d"] = true, ["e"] = true, ["f"] = true, ["g"] = true,
+    ["h"] = true, ["i"] = true, ["j"] = true, ["k"] = true, ["l"] = true, ["m"] = true, ["n"] = true,
+    ["o"] = true, ["p"] = true, ["q"] = true, ["r"] = true, ["s"] = true, ["t"] = true, ["u"] = true,
+    ["v"] = true, ["w"] = true, ["x"] = true, ["y"] = true, ["z"] = true,
+    ["capslock"] = true,
+    ["f1"] = true, ["f2"] = true, ["f3"] = true, ["f4"] = true, ["f5"] = true, ["f6"] = true, ["f7"] = true,
+    ["f8"] = true, ["f9"] = true, ["f10"] = true, ["f11"] = true, ["f12"] = true,
+    ["printscreen"] = true, ["scrolllock"] = true, ["pause"] = true, ["insert"] = true,
+    ["home"] = true, ["pageup"] = true, ["delete"] = true, ["end"] = true, ["pagedown"] = true,
+    ["right"] = true, ["left"] = true, ["down"] = true, ["up"] = true,
+    ["numlock"] = true, ["kp/"] = true, ["kp*"] = true, ["kp-"] = true, ["kp+"] = true, ["kpenter"] = true,
+    ["kp0"] = true, ["kp1"] = true, ["kp2"] = true, ["kp3"] = true, ["kp4"] = true, ["kp5"] = true,
+    ["kp6"] = true, ["kp7"] = true, ["kp8"] = true, ["kp9"] = true, ["kp."] = true, ["kp,"] = true, ["kp="] = true,
+    ["application"] = true, ["power"] = true,
+    ["f13"] = true, ["f14"] = true, ["f15"] = true, ["f16"] = true, ["f17"] = true, ["f18"] = true,
+    ["f19"] = true, ["f20"] = true, ["f21"] = true, ["f22"] = true, ["f23"] = true, ["f24"] = true,
+    ["execute"] = true, ["help"] = true, ["menu"] = true, ["select"] = true, ["stop"] = true,
+    ["again"] = true, ["undo"] = true, ["cut"] = true, ["copy"] = true, ["paste"] = true, ["find"] = true,
+    ["mute"] = true, ["volumeup"] = true, ["volumedown"] = true,
+    ["alterase"] = true, ["sysreq"] = true, ["cancel"] = true, ["clear"] = true, ["prior"] = true,
+    ["return2"] = true, ["separator"] = true, ["out"] = true, ["oper"] = true, ["clearagain"] = true,
+    ["thsousandsseparator"] = true, ["decimalseparator"] = true, ["currencyunit"] = true, ["currencysubunit"] = true,
+    ["lctrl"] = true, ["lshift"] = true, ["lalt"] = true, ["lgui"] = true,
+    ["rctrl"] = true, ["rshift"] = true, ["ralt"] = true, ["rgui"] = true, ["mode"] = true,
+    ["audionext"] = true, ["audioprev"] = true, ["audiostop"] = true, ["audioplay"] = true, ["audiomute"] = true,
+    ["mediaselect"] = true, ["brightnessdown"] = true, ["brightnessup"] = true, ["displayswitch"] = true,
+    ["kbdillumtoggle"] = true, ["kbdillumdown"] = true, ["kbdillumup"] = true, ["eject"] = true, ["sleep"] = true,
+    ["mouse1"] = true, ["mouse2"] = true, ["mouse3"] = true, ["mouse4"] = true, ["mouse5"] = true,
+    ["wheelup"] = true, ["wheeldown"] = true,
+}
+
 function Input.new()
     local self = {}
 
@@ -152,10 +194,13 @@ function Input:down(action, interval, delay)
 
     elseif action and not interval and not delay then
         for _, key in ipairs(self.binds[action]) do
-            if (love.keyboard.isDown(key) or love.mouse.isDown(key_to_button[key] or 0)) then
+            -- LÖVE 11.5의 love.keyboard.isDown()은 게임패드 가상 키(dpup 등)나
+            -- 알 수 없는 키 이름을 받으면 "Invalid key constant" 에러를 던진다.
+            -- 키보드/마우스가 이해할 수 있는 키만 isDown에 넘기고, 나머지는 건너뛴다.
+            if Input.keyboard_keys[key] and (love.keyboard.isDown(key) or love.mouse.isDown(key_to_button[key] or 0)) then
                 return true
             end
-            
+
             -- Supports only 1 gamepad, add more later...
             if self.joysticks[1] then
                 if axis_to_button[key] then
