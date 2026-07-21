@@ -62,9 +62,12 @@ function setPermanentGlobals(opts)
     sfx_volume = 5
     music_volume = 5
     muted = false
-    fullscreen = true
+    -- Display: 'windowed' / 'fullscreen' / 'desktop' (borderless)
+    display_mode = 'windowed'
+    fullscreen = false  -- legacy alias, kept for save compatibility
     display = 1
-    sx, sy = 2, 2
+    window_scale = 2    -- 1..6: how many 480x270 tiles the window covers
+    sx, sy = 2, 2       -- mirror of window_scale for the game render
     screen_shake = 10
     distortion = 5
     glitch = 10

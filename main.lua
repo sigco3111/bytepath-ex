@@ -26,6 +26,7 @@ require 'GameObject'
 require 'utils'
 require 'globals'
 require 'tree'
+require 'rooms/Options'
 
 function love.load()
     time = 0
@@ -102,8 +103,11 @@ function love.load()
 
     load()
 
-    if first_run_ever then resizeFullscreen()
-    else resize(sx, sy, fullscreen) end
+    if first_run_ever then
+        display_mode = 'windowed'
+        window_scale = 2
+        applyDisplayMode()
+    else applyDisplayMode() end
 
     current_room = nil
     -- BYTEPATH는 첫 프레임에 Console을 보여주기 위해 즉시 gotoRoom을 호출한다.
@@ -190,6 +194,20 @@ function love.keypressed(key)
     if current_room and current_room.keypressed then current_room:keypressed(key) end
 end
 
+-- Player dragged the window edge in windowed mode: figure out the new
+-- window_scale from the live size and persist it. (Ignored in fullscreen.)
+function love.resize(w, h)
+    if (display_mode or 'windowed') ~= 'windowed' then return end
+    local sx_new = math.max(1, math.floor(w / gw + 0.5))
+    local sy_new = math.max(1, math.floor(h / gh + 0.5))
+    local s = math.min(sx_new, sy_new)
+    if s ~= window_scale then
+        window_scale = clampWindowScale(s)
+        sx, sy = window_scale, window_scale
+        if save then pcall(save) end
+    end
+end
+
 function love.focus(f)
     if not f then
         if current_room and current_room:is(Stage) and not current_room.paused then
@@ -204,18 +222,75 @@ function love.quit()
     -- sendDataToServer(binser.serialize({id = id, duration = os.difftime(os.time(), start_time), start_date = start_date, end_date = os.date("*t")}))
 end
 
+-- Display mode options
+display_mode_list = {'windowed', 'fullscreen', 'desktop'}
+window_scale_min, window_scale_max = 1, 6
+
+function clampWindowScale(s)
+    if type(s) ~= 'number' then return 2 end
+    if s < window_scale_min then return window_scale_min end
+    if s > window_scale_max then return window_scale_max end
+    return math.floor(s)
+end
+
+-- Apply the current display_mode / window_scale / display values to the window.
+-- Always called after the user picks something in the Options screen.
+-- Persists the choice so the next launch comes up the same way.
+function applyDisplayMode()
+    local mode = display_mode or 'windowed'
+    display = display or 1
+    window_scale = clampWindowScale(window_scale or 2)
+    sx, sy = window_scale, window_scale
+
+    if mode == 'windowed' then
+        fullscreen = false
+        local w, h = gw * window_scale, gh * window_scale
+        love.window.setMode(w, h, {
+            display = display,
+            fullscreen = false,
+            borderless = false,
+            resizable = true,
+            minwidth = gw,
+            minheight = gh,
+        })
+    elseif mode == 'fullscreen' then
+        fullscreen = true
+        local w, h = love.window.getDesktopDimensions(display)
+        love.window.setMode(w, h, {
+            display = display,
+            fullscreen = true,
+            fullscreentype = 'exclusive',
+            borderless = false,
+        })
+        sx, sy = math.floor(w / gw), math.floor(h / gh)
+        window_scale = sx
+    else -- 'desktop' (borderless fullscreen at desktop resolution)
+        fullscreen = true
+        local w, h = love.window.getDesktopDimensions(display)
+        love.window.setMode(w, h, {
+            display = display,
+            fullscreen = true,
+            fullscreentype = 'desktop',
+            borderless = true,
+        })
+        sx, sy = math.floor(w / gw), math.floor(h / gh)
+        window_scale = sx
+    end
+
+    -- Persist after every change so a crash or kill -9 still keeps the choice.
+    if save then pcall(save) end
+end
+
+-- Compatibility wrappers for any older call sites
 function resize(x, y, fs)
-    local y = y or x
-    fullscreen = fs
-    love.window.setMode(x*gw, y*gh, {display = display, fullscreen = fs, borderless = fs})
-    sx, sy = x, y
+    window_scale = clampWindowScale(x)
+    display_mode = fs and 'fullscreen' or 'windowed'
+    applyDisplayMode()
 end
 
 function resizeFullscreen()
-    fullscreen = true
-    local w, h = love.window.getDesktopDimensions()
-    love.window.setMode(w, h, {display = display, fullscreen = true, borderless = true})
-    sx, sy = w/gw, h/gh
+    display_mode = 'desktop'
+    applyDisplayMode()
 end
 
 function changeToDisplay(n)
@@ -266,7 +341,9 @@ function save()
     permanent_save_data.glitch = glitch
     permanent_save_data.muted = muted
     permanent_save_data.fullscreen = fullscreen
+    permanent_save_data.display_mode = display_mode
     permanent_save_data.display = display
+    permanent_save_data.window_scale = window_scale
     permanent_save_data.achievements = achievements
 
     transient_save_data.skill_points = skill_points
@@ -319,7 +396,9 @@ function load()
         glitch = save_data.glitch
         muted = save_data.muted
         fullscreen = save_data.fullscreen
+        display_mode = save_data.display_mode or (save_data.fullscreen and 'desktop' or 'windowed')
         display = save_data.display
+        window_scale = save_data.window_scale or sx or 2
         achievements = save_data.achievements
     end
 

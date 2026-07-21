@@ -9,7 +9,7 @@ function ConsoleInputLine:new(x, y, opts)
     self:setCharacters()
     self.timer:every(0.4, function() self.cursor_show = not self.cursor_show end)
 
-    self.commands = {'resolution', 'sound', 'device', 'fullscreen', 'passives', 'clear', 'help', 'achievements', 'about', 'escape', 'shutdown', 'start', 'classes', 'display', 'effects', 'credits'}
+    self.commands = {'resolution', 'sound', 'device', 'fullscreen', 'passives', 'clear', 'help', 'achievements', 'about', 'escape', 'shutdown', 'start', 'classes', 'display', 'effects', 'credits', 'options'}
 end
 
 function ConsoleInputLine:update(dt)
@@ -118,6 +118,9 @@ function ConsoleInputLine:enter()
 
         elseif command == 'classes' then
             gotoRoom('Classes')
+
+        elseif command == 'options' then
+            gotoRoom('Options')
 
         elseif command:find('verify') then
             local key_string = command:utf8sub(8, -1)

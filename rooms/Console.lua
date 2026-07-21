@@ -77,7 +77,7 @@ function Console:update(dt)
 
         if input:pressed('down') then
             self.bytepath_main_selection_index = self.bytepath_main_selection_index + 1
-            if self.bytepath_main_selection_index == 7 then self.bytepath_main_selection_index = 1 end
+            if self.bytepath_main_selection_index == 8 then self.bytepath_main_selection_index = 1 end
             playMenuSwitch()
         end
 
@@ -271,15 +271,16 @@ function Console:bytepathMain(delay)
     self:addLine(delay + 0.36, '~ type @classes# to view the class window')
     self:addLine(delay + 0.38, '~ type @device# to select a new device')
     self:addLine(delay + 0.40, '~ type @passives# to view the passive skill tree')
-    self:addLine(delay + 0.42, '')
+    self:addLine(delay + 0.42, '~ type @options# to view display / window options')
+    self:addLine(delay + 0.44, '')
     self:addInputLine(delay + 0.44, '[;root,]arch~ ')
 
     self.timer:after(delay, function()
         self.bytepath_main = true
         self.bytepath_main_active = false
         self.bytepath_main_selection_index = 1
-        self.bytepath_main_texts = {'escape', 'start', 'help', 'classes', 'device', 'passives'}
-        self.bytepath_main_selection_widths = {self.font:getWidth('escape'), self.font:getWidth('start'), self.font:getWidth('help'), self.font:getWidth('classes'), self.font:getWidth('device'), self.font:getWidth('passives')}
+        self.bytepath_main_texts = {'escape', 'start', 'help', 'classes', 'device', 'passives', 'options'}
+        self.bytepath_main_selection_widths = {self.font:getWidth('escape'), self.font:getWidth('start'), self.font:getWidth('help'), self.font:getWidth('classes'), self.font:getWidth('device'), self.font:getWidth('passives'), self.font:getWidth('options')}
         if loop > 0 then self.bytepath_main_y = self.line_y + 13*12
         else self.bytepath_main_y = self.line_y + 13*12 - 12 end
         self.timer:after(0.38, function() self.bytepath_main_active = true end)
@@ -317,15 +318,16 @@ function Console:bytepathMain2()
     self:addLine(delay + 0.26, '~ type @classes# to view the class window')
     self:addLine(delay + 0.28, '~ type @device# to select a new device')
     self:addLine(delay + 0.30, '~ type @passives# to view the passive skill tree')
-    self:addLine(delay + 0.32, '')
+    self:addLine(delay + 0.32, '~ type @options# to view display / window options')
+    self:addLine(delay + 0.34, '')
     self:addInputLine(delay + 0.34, '[;root,]arch~ ')
 
     self.timer:after(delay, function()
         self.bytepath_main = true
         self.bytepath_main_active = false
         self.bytepath_main_selection_index = 1
-        self.bytepath_main_texts = {'escape', 'start', 'help', 'classes', 'device', 'passives'}
-        self.bytepath_main_selection_widths = {self.font:getWidth('escape'), self.font:getWidth('start'), self.font:getWidth('help'), self.font:getWidth('classes'), self.font:getWidth('device'), self.font:getWidth('passives')}
+        self.bytepath_main_texts = {'escape', 'start', 'help', 'classes', 'device', 'passives', 'options'}
+        self.bytepath_main_selection_widths = {self.font:getWidth('escape'), self.font:getWidth('start'), self.font:getWidth('help'), self.font:getWidth('classes'), self.font:getWidth('device'), self.font:getWidth('passives'), self.font:getWidth('options')}
         self.bytepath_main_y = self.line_y + 9*12 - 12
         self.timer:after(0.30, function() self.bytepath_main_active = true end)
     end)
