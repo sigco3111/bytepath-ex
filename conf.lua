@@ -7,7 +7,7 @@ function love.conf(t)
     t.releases = {
         title = 'BYTEPATH',              -- The project title (string)
         package = 'BYTEPATH',            -- The project command and package name (string)
-        loveVersion = '0.10.2',        -- The project LÖVE version
+        loveVersion = '11.5',
         version = '1.0',            -- The project version
         author = 'SSYGEN',             -- Your name (string)
         email = 'adonaac@gmail.com',              -- Your email (string)
@@ -19,7 +19,7 @@ function love.conf(t)
     }
 
     t.identity = nil                   -- The name of the save directory (string)
-    t.version = "0.10.2"                -- The LÖVE version this game was made for (string)
+    t.version = "11.5"                -- The LÖVE version this game was made for (string)
     t.console = false                  -- Attach a console (boolean, Windows only)
  
     t.window.title = "BYTEPATH" -- The window title (string)
@@ -31,12 +31,11 @@ function love.conf(t)
     t.window.minwidth = 1              -- Minimum window width if the window is resizable (number)
     t.window.minheight = 1             -- Minimum window height if the window is resizable (number)
     t.window.fullscreen = false        -- Enable fullscreen (boolean)
-    t.window.fullscreentype = "exclusive" -- Standard fullscreen or desktop fullscreen mode (string)
-    t.window.vsync = true              -- Enable vertical sync (boolean)
-    t.window.fsaa = 0                  -- The number of samples to use with multi-sampled antialiasing (number)
+    t.window.fullscreentype = "desktop" -- Standard fullscreen or desktop fullscreen mode (string)
+    t.window.vsync = 1              -- Enable vertical sync (boolean)
+    t.window.msaa = 0                   -- The number of samples to use with multi-sampled antialiasing (number)
     t.window.display = 1               -- Index of the monitor to show the window in (number)
     t.window.highdpi = false           -- Enable high-dpi mode for the window on a Retina display (boolean)
-    t.window.srgb = false              -- Enable sRGB gamma correction when drawing to the screen (boolean)
     t.window.x = nil                   -- The x-coordinate of the window's position in the specified display (number)
     t.window.y = nil                   -- The y-coordinate of the window's position in the specified display (number)
  

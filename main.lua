@@ -1,5 +1,6 @@
-Steam = require 'libraries/steamworks'
-if type(Steam) == 'boolean' then Steam = nil end
+Steam = nil
+-- BYTEPATH는 Steamworks 없이도 싱글플레이로 실행할 수 있습니다.
+-- 원본의 FFI Steamworks 로딩은 macOS용 Steam SDK가 없으면 require 단계에서 실패하므로 비활성화합니다.
 
 Object = require 'libraries/classic/classic'
 Timer = require 'libraries/enhanced_timer/EnhancedTimer'
@@ -35,9 +36,8 @@ function love.load()
     love.filesystem.setIdentity('BYTEPATH')
     love.graphics.setDefaultFilter('nearest', 'nearest')
     love.graphics.setLineStyle('rough')
-    love.graphics.setBackgroundColor(background_color)
+    love.graphics.setBackgroundColor(background_color[1]/255, background_color[2]/255, background_color[3]/255)
     love.keyboard.setKeyRepeat(false)
-
     loadFonts('resources/fonts')
     loadGraphics('resources/graphics')
     loadShaders('resources/shaders')
@@ -106,7 +106,8 @@ function love.load()
     else resize(sx, sy, fullscreen) end
 
     current_room = nil
-    timer:after(0.5, function() gotoRoom('Console') end)
+    -- BYTEPATH는 첫 프레임에 Console을 보여주기 위해 즉시 gotoRoom을 호출한다.
+    gotoRoom('Console')
 
     slow_amount = 1
     fps = 60
@@ -175,9 +176,10 @@ function love.draw()
         if flash_frames == -1 then flash_frames = nil end
     end
     if flash_frames then
-        love.graphics.setColor(background_color)
-        love.graphics.rectangle('fill', 0, 0, sx*gw, sy*gh)
-        love.graphics.setColor(255, 255, 255)
+        love.graphics.setColor(background_color[1]/255, background_color[2]/255, background_color[3]/255)
+        local ox, oy, s = getLetterboxOffset()
+        love.graphics.rectangle('fill', ox, oy, gw*s, gh*s)
+        love.graphics.setColor(1, 1, 1)
     end
 
     draw_times[draw_index] = os.clock() - start_time
@@ -483,7 +485,24 @@ function type_name(o)
 	return global_type_table[getmetatable(o) or 0] or "Unknown"
 end
 
-function love.run()
+-- LÖVE 0.10.2용 커스텀 love.run은 LÖVE 11.5의 love.handlers 변경과
+-- 호환되지 않아 draw가 호출되지 않는 검은 화면을 만든다.
+-- 기본 LÖVE 11.5 루프를 사용하도록 통째로 비활성화한다.
+-- 480x270 게임 캔버스를 윈도우 크기에 맞게 letterbox로 매핑한다.
+function getLetterboxOffset()
+    local win_w, win_h = love.graphics.getDimensions()
+    local scale = math.min(win_w / gw, win_h / gh)
+    local draw_w, draw_h = gw * scale, gh * scale
+    local ox, oy = (win_w - draw_w) / 2, (win_h - draw_h) / 2
+    return ox, oy, scale
+end
+
+function drawGameCanvas(canvas)
+    local ox, oy, scale = getLetterboxOffset()
+    love.graphics.draw(canvas, ox, oy, 0, scale, scale)
+end
+
+function legacy_love_run_disabled()
     if love.math then love.math.setRandomSeed(os.time()) end
     if love.load then love.load(arg) end
     if love.timer then love.timer.step() end
