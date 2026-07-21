@@ -12,3 +12,7 @@ permanent_save
 .vscode/
 *.swp
 *.swo
+
+# Build artifacts
+bytepath-ex.app/
+bytepath-ex-macos-*.zip
