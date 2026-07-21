@@ -1,32 +1,36 @@
-## BYTEPATH
+# bytepath-ex
 
-A replayable arcade shooter with a focus on build theorycrafting. Use a massive skill tree, many classes and ships to create your own builds and defeat an ever increasing amount of enemies. 
+BYTEPATH (a327ex, MIT) — LÖVE 11.5 port and improvement branch.
 
-* **[Steam](https://store.steampowered.com/app/760330/BYTEPATH/)**
-* **[Tutorial](https://github.com/a327ex/blog/issues/30)**
+The upstream release was built against LÖVE 0.10.2 and no longer
+boots on a modern `brew install --cask love` install. This fork
+applies the minimum set of changes needed to make the game run
+under LÖVE 11.5 (Mysterious Mysteries, 2024-era stable) on macOS,
+without changing the gameplay.
 
-<br>
+## Run
 
-<p align="center">
-<img src="https://user-images.githubusercontent.com/409773/41509911-caf3c20a-7231-11e8-96b9-d70596f753f5.gif">
-</p>
+```bash
+brew install --cask love
+xattr -dr com.apple.quarantine /Applications/love.app   # Gatekeeper bypass
+cd bytepath-ex
+love .
+```
 
-<p align="center">
-<img src="https://i.imgur.com/9E8Stns.gif">
-</p>
+The game window opens at 1280x720, the 480x270 game frame is
+letterboxed inside it. Type `start` on the console screen to begin.
 
-### Running
+## What changed vs upstream
 
-Download this repository, `cd` into it and then run `love/love.exe --console .`. If you're on Linux then check [this comment](https://www.reddit.com/r/linux_gaming/comments/hlwzjn/bytepath_a_replayable_arcade_shooter_with_a_focus/fx2j1ss/) on reddit which goes over all needed changes to make it run from a Linux machine.
+Four commits on top of the a327ex master HEAD:
 
----
+| Commit | Area | Reason |
+| --- | --- | --- |
+| `shaders:` | `resources/shaders/*.frag` | LÖVE 11.5 dropped the legacy GLSL front matter (`extern Image`, `Image` parameter type). Without the port the shaders fail to compile silently and the screen saturates to white. |
+| `core:` | `main.lua`, `conf.lua`, `libraries/sound.lua` | API migrations: `setLooping` strict boolean, `isStopped` removed (use `isPlaying`), `love.run` default loop, `conf.lua` fsaa→msaa / vsync=1 / fullscreentype="desktop", Steamworks shimmed to `nil`. |
+| `boipushy/Input:` | `libraries/boipushy/Input.lua` | LÖVE 11.5's `love.keyboard.isDown` raises "Invalid key constant" for gamepad virtual names (`dpup`, `l1`, ...). Add a keyboard-only whitelist before calling it. |
+| `rooms:` | `rooms/Stage.lua`, `rooms/Console.lua` | All `setColor` calls normalized from 0..255 to 0..1, final canvas draw routed through `drawGameCanvas()` for letterboxing. |
 
-### Tutorial
+## License
 
-A full tutorial where the game is built from scratch is available [here](https://github.com/a327ex/blog/issues/30). This tutorial goes over the entire process of building the game step by step. The `tutorial` folder in this repository also contains the necessary files to follow along with the tutorial as well as answers to exercises (look into them only after really trying to answer!).
-
----
-
-### License
-
-All assets have their specific licenses and they are linked to in the game's credits. All code is under the MIT license.
+Original code © a327ex, MIT. Port changes in this fork are MIT as well.

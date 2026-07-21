@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# LÖVE save files written into %APPDATA%/love/BYTEPATH/ via
+# love.filesystem.setIdentity('BYTEPATH')
+*.save
+transient_save
+permanent_save
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
