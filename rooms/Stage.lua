@@ -294,73 +294,101 @@ function Stage:draw()
             love.graphics.print(text, math.floor(x + 5), math.floor(y + 4))
         end
 
-        -- Pause, scorescreen
-        if self.scorescreen then self.scorescreen_object:draw() end
-        if self.paused then self.paused_object:draw() end
-
+        -- Pause, scorescreen — drawn AFTER drawGameCanvas below.
     love.graphics.setCanvas()
 
     love.graphics.setCanvas(self.temp_canvas)
     love.graphics.clear()
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.setBlendMode("alpha", "premultiplied")
-
-        love.graphics.setShader(shaders.rgb_shift)
-        shaders.rgb_shift:send('amount', {random(-self.rgb_shift_mag, self.rgb_shift_mag)/gw, random(-self.rgb_shift_mag, self.rgb_shift_mag)/gh})
-        love.graphics.draw(self.rgb_shift_canvas, 0, 0, 0, 1, 1)
-        love.graphics.setShader()
-
-        shaders.displacement:send('displacement_map', self.shockwave_canvas)
-        love.graphics.setShader(shaders.displacement)
-        love.graphics.draw(self.main_canvas, 0, 0, 0, 1, 1)
-        love.graphics.setBlendMode('alpha')
-        love.graphics.setShader()
-  	love.graphics.setCanvas()
+        if scanlines_enabled and not disable_expensive_shaders then
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.setBlendMode("alpha", "premultiplied")
+            -- rgb_shift pass
+            love.graphics.setShader(shaders.rgb_shift)
+            shaders.rgb_shift:send('amount', {random(-self.rgb_shift_mag, self.rgb_shift_mag)/gw, random(-self.rgb_shift_mag, self.rgb_shift_mag)/gh})
+            love.graphics.draw(self.rgb_shift_canvas, 0, 0, 0, 1, 1)
+            love.graphics.setShader()
+            -- displacement pass
+            shaders.displacement:send('displacement_map', self.shockwave_canvas)
+            love.graphics.setShader(shaders.displacement)
+            love.graphics.draw(self.main_canvas, 0, 0, 0, 1, 1)
+            love.graphics.setBlendMode('alpha')
+            love.graphics.setShader()
+        else
+            -- Effects off: blit the unfiltered main + rgb_shift canvases into
+            -- temp_canvas.
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.draw(self.rgb_shift_canvas, 0, 0, 0, 1, 1)
+            love.graphics.draw(self.main_canvas, 0, 0, 0, 1, 1)
+        end
+    love.graphics.setCanvas()
 
     love.graphics.setCanvas(self.temp_canvas_2)
     love.graphics.clear()
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.setBlendMode("alpha", "premultiplied")
-        love.graphics.setShader(shaders.glitch)
-        shaders.glitch:send('glitch_map', self.glitch_canvas)
-        love.graphics.draw(self.temp_canvas, 0, 0, 0, 1, 1)
-        love.graphics.setShader()
-  		love.graphics.setBlendMode("alpha")
+        if scanlines_enabled and not disable_expensive_shaders then
+            -- glitch pass
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.setBlendMode("alpha", "premultiplied")
+            love.graphics.setShader(shaders.glitch)
+            shaders.glitch:send('glitch_map', self.glitch_canvas)
+            love.graphics.draw(self.temp_canvas, 0, 0, 0, 1, 1)
+            love.graphics.setShader()
+            love.graphics.setBlendMode("alpha")
+        else
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.draw(self.temp_canvas, 0, 0, 0, 1, 1)
+        end
     love.graphics.setCanvas()
 
     love.graphics.setCanvas(self.temp_canvas_3)
     love.graphics.clear()
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.setBlendMode("alpha", "premultiplied")
-        love.graphics.setShader(shaders.rgb_shift)
-        shaders.rgb_shift:send('amount', {random(-self.rgb_shift_mag_2, self.rgb_shift_mag_2)/gw, random(-self.rgb_shift_mag_2, self.rgb_shift_mag_2)/gh})
-        love.graphics.draw(self.temp_canvas_2, 0, 0, 0, 1, 1)
-        love.graphics.setShader()
-  		love.graphics.setBlendMode("alpha")
+        if scanlines_enabled and not disable_expensive_shaders then
+            -- second rgb_shift pass
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.setBlendMode("alpha", "premultiplied")
+            love.graphics.setShader(shaders.rgb_shift)
+            shaders.rgb_shift:send('amount', {random(-self.rgb_shift_mag_2, self.rgb_shift_mag_2)/gw, random(-self.rgb_shift_mag_2, self.rgb_shift_mag_2)/gh})
+            love.graphics.draw(self.temp_canvas_2, 0, 0, 0, 1, 1)
+            love.graphics.setShader()
+            love.graphics.setBlendMode("alpha")
+        else
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.draw(self.temp_canvas_2, 0, 0, 0, 1, 1)
+        end
     love.graphics.setCanvas()
 
     love.graphics.setCanvas(self.final_canvas)
     love.graphics.clear()
         love.graphics.setColor(1, 1, 1)
         love.graphics.setBlendMode("alpha", "premultiplied")
-        if glitch ~= 0 then
+        if scanlines_enabled and not disable_expensive_shaders and glitch ~= 0 then
             love.graphics.setShader(shaders.rgb)
             shaders.rgb:send('rgb_map', self.rgb_canvas)
         end
         love.graphics.draw(self.temp_canvas_3, 0, 0, 0, 1, 1)
         love.graphics.setShader()
-  		love.graphics.setBlendMode("alpha")
+        love.graphics.setBlendMode("alpha")
+
+        -- Paused / scorescreen overlays are painted INSIDE final_canvas,
+        -- before the distort shader pass, so glitch / rgb_shift effects all
+        -- leave them alone. (The distort pass also doesn't smear text
+        -- because we draw text-only UI here; rectangle fills are simple
+        -- enough that horizontal_fuzz/rgb_offset don't visually damage them.)
+        if self.scorescreen then self.scorescreen_object:draw() end
+        if self.paused then self.paused_object:draw() end
     love.graphics.setCanvas()
 
-    if not disable_expensive_shaders then
+    if scanlines_enabled and not disable_expensive_shaders then
+        -- distort shader pass: scanlines + horizontal fuzz + rgb offset
         love.graphics.setShader(shaders.distort)
         shaders.distort:send('time', time)
         shaders.distort:send('horizontal_fuzz', 0.6*(distortion/10))
         shaders.distort:send('rgb_offset', 0.4*(distortion/10))
+        shaders.distort:send('scanlines', scanlines_enabled and 1 or 0)
     end
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setBlendMode('alpha', 'premultiplied')
     drawGameCanvas(self.final_canvas)
+
     love.graphics.setBlendMode('alpha')
     love.graphics.setShader()
 end

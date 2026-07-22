@@ -286,18 +286,22 @@ function Achievements:draw()
     love.graphics.clear()
         love.graphics.setColor(255, 255, 255)
         love.graphics.setBlendMode("alpha", "premultiplied")
-        love.graphics.setShader(shaders.glitch)
-        shaders.glitch:send('glitch_map', self.glitch_canvas)
+        if scanlines_enabled and not disable_expensive_shaders then
+            love.graphics.setShader(shaders.glitch)
+            shaders.glitch:send('glitch_map', self.glitch_canvas)
+        end
         love.graphics.draw(self.main_canvas, 0, 0, 0, 1, 1)
         love.graphics.setShader()
-  		love.graphics.setBlendMode("alpha")
+        love.graphics.setBlendMode("alpha")
     love.graphics.setCanvas()
 
-    if not disable_expensive_shaders then
+    if scanlines_enabled and not disable_expensive_shaders then
+        -- distort shader pass: scanlines + horizontal fuzz + rgb offset
         love.graphics.setShader(shaders.distort)
         shaders.distort:send('time', time)
         shaders.distort:send('horizontal_fuzz', 0.2*(distortion/10))
         shaders.distort:send('rgb_offset', 0.2*(distortion/10))
+        shaders.distort:send('scanlines', scanlines_enabled and 1 or 0)
     end
     love.graphics.setColor(255, 255, 255, 255)
     love.graphics.setBlendMode('alpha', 'premultiplied')

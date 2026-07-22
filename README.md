@@ -59,7 +59,11 @@ xattr -dr com.apple.quarantine /Applications/bytepath-ex.app
 | `core: migrate from LÖVE 0.10.2 to 11.5 API` | `main.lua`, `conf.lua`, `libraries/sound.lua` | `setLooping`이 strict boolean, `Source:isStopped()` 제거, 커스텀 `love.run`이 LÖVE 11.5의 `love.handlers` 변경과 충돌, `conf.lua`의 `fsaa` → `msaa` / `vsync = true` → `1` / `fullscreentype = "desktop"` 등. |
 | `boipushy/Input: gate love.keyboard.isDown on known keyboard keys` | `libraries/boipushy/Input.lua` | LÖVE 11.5의 `love.keyboard.isDown`은 게임패드 가상 키(`dpup` 등)나 알 수 없는 키를 받으면 `Invalid key constant` 에러를 던집니다. 화이트리스트로 막았습니다. |
 | `rooms: normalize colors to 0..1 and route through drawGameCanvas` | `rooms/Stage.lua`, `rooms/Console.lua` | 셰이더 파이프라인은 0..1 RGBA를 기대하지만 원본은 0..255 정수를 사용했습니다. 모든 `setColor`를 0..1로 정규화하고, 최종 캔버스 출력을 `drawGameCanvas()`로 letterbox 처리했습니다. |
-| `docs: README, CHANGELOG v0.1.0, .gitignore` | README, CHANGELOG, .gitignore | 문서. |
+| `options: v0.2.0 display mode window/fullscreen/desktop` | `rooms/Options.lua`, `main.lua` | `Options` 룸 신설, `display_mode` / `window_scale` / `display` 토글, `love.window.setMode()` 동적 처리, `love.resize` 자동 window_scale 감지. |
+| `ui: v0.2.1 fix shader-free UI for Classes/Passive, rebuild main menu` | `rooms/Classes.lua`, `rooms/SkillTree.lua`, `objects/Node.lua`, `objects/Line.lua`, `rooms/Console.lua` | 4-pass 셰이더 파이프라인을 우회하여 셰이더 깨진 Class/Passive 룸을 복구, GUI 메뉴 재작성, 모듈 잔상 제거. |
+| `options: scanlines on/off toggle` | `rooms/Options.lua`, `main.lua` | distort 셰이더의 `scanlines` uniform + glitch/rgb_shift/displace 셰이더 패스 모두 동시 off 토글. |
+| `escape/esc to leave Options + paused overlay after shader passes` | `rooms/Options.lua`, `objects/Paused.lua`, `rooms/Stage.lua` | esc 키로 옵션 화면 종료, 일시정지 시 셰이더 패스 후 dim 오버레이 + RESUME/MENU 버튼. |
+| `module ghosting cleanup on Console destroy` | `rooms/Console.lua` | 모듈 진입 후 복귀 시 잔상 라인 정리, 비활성 모듈 draw 가드. |
 
 ### 미해결 / 알려진 이슈
 

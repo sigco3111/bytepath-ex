@@ -6,6 +6,11 @@ function Options:new()
     camera:lookAt(gw/2, gh/2)
     camera.scale = 1
     self.area = Area(self)
+    -- Single offscreen target: the 480×270 viewport is rendered into this
+    -- canvas, then blitted to the live window via drawGameCanvas() so it
+    -- fills the window instead of sitting in the top-left corner. Same
+    -- pattern as Classes/SkillTree.
+    self.render_canvas = love.graphics.newCanvas(gw, gh)
 
     -- Build a single "list" of selectable rows. The order is fixed; the
     -- selection index walks the list. Some rows are settings (toggle /
@@ -15,6 +20,7 @@ function Options:new()
         {kind = 'mode',     key = 'display_mode', label = 'display mode'},
         {kind = 'scale',    key = 'window_scale', label = 'window size'},
         {kind = 'monitor',  key = 'display',      label = 'monitor'},
+        {kind = 'toggle',   key = 'scanlines',    label = 'scanlines'},
         {kind = 'action',   action = 'back',       label = '~ back to console'},
     }
     self.index = 2  -- first selectable (skip header)
@@ -31,8 +37,10 @@ function Options:new()
     input:bind('up', 'up')
     input:bind('down', 'down')
     input:bind('return', 'enter')
-    input:bind('escape', 'back')
     input:bind('mouse1', 'click')
+    -- `escape` (and gamepad `select`) jumps straight to console.
+    input:bind('escape', 'escape')
+    input:bind('select', 'escape')
 end
 
 function Options:update(dt)
@@ -73,13 +81,25 @@ function Options:update(dt)
             display = ((display - 1 + dir) % n) + 1
             applyDisplayMode()
             playMenuSwitch()
+        elseif row.kind == 'toggle' then
+            if row.key == 'scanlines' then
+                scanlines_enabled = not scanlines_enabled
+                if save then pcall(save) end
+                playMenuSwitch()
+            end
         end
+        if save then pcall(save) end
     elseif input:pressed('enter') then
         local row = self.rows[self.index]
         if row and row.kind == 'action' and row.action == 'back' then
             playKeystroke()
             gotoRoom('Console')
         end
+    elseif input:pressed('escape') then
+        -- Esc / select jumps back to console (consistent with the bytepath
+        -- main-menu convention).
+        playMenuBack()
+        gotoRoom('Console')
     end
 
     if input:pressed('click') then
@@ -121,18 +141,23 @@ function Options:_step(dir)
     elseif row.kind == 'monitor' then
         local n = love.window.getDisplayCount()
         if n > 1 then display = ((display - 1 + dir) % n) + 1 end
+    elseif row.kind == 'toggle' and row.key == 'scanlines' then
+        scanlines_enabled = not scanlines_enabled
     end
     applyDisplayMode()
+    if row.kind == 'toggle' or row.kind == 'scale' or row.kind == 'mode' or row.kind == 'monitor' then
+        if save then pcall(save) end
+    end
     playMenuSwitch()
 end
 
 function Options:draw()
-    -- LÖVE 11.5 path: render straight to the screen via drawGameCanvas
-    love.graphics.setCanvas()
+    -- Render the 480×270 viewport into self.render_canvas, then hand it to
+    -- drawGameCanvas() so it fills the live window via letterbox scaling.
+    love.graphics.setCanvas(self.render_canvas)
+    love.graphics.clear(0, 0, 0, 1)
     love.graphics.setShader()
     love.graphics.setBlendMode('alpha')
-    love.graphics.setColor(0, 0, 0, 1)
-    love.graphics.rectangle('fill', 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
 
     local font = self.font
     love.graphics.setFont(font)
@@ -172,6 +197,8 @@ function Options:draw()
                 end
             elseif row.key == 'display' then
                 value = 'monitor ' .. display .. ' / ' .. love.window.getDisplayCount()
+            elseif row.key == 'scanlines' then
+                value = scanlines_enabled and 'on' or 'off'
             end
 
             local r, g, b = default_color[1]/255, default_color[2]/255, default_color[3]/255
@@ -191,6 +218,9 @@ function Options:draw()
     -- Bottom hint
     love.graphics.setColor(0.5, 0.5, 0.5, 1)
     love.graphics.print('up/down = select   left/right = change   enter/click = back', 8, gh - 12)
+
+    love.graphics.setCanvas()
+    drawGameCanvas(self.render_canvas)
 end
 
 function Options:destroy() end

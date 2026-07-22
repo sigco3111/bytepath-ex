@@ -117,38 +117,63 @@ function Console:draw()
     love.graphics.clear()
         camera:attach(0, 0, gw, gh)
         for _, line in ipairs(self.lines) do line:draw() end
-        for _, module in ipairs(self.modules) do module:draw() end
+        for _, module in ipairs(self.modules) do
+            -- Skip modules that aren't currently active. Many modules (Device,
+            -- Escape, Help, Shutdown) keep themselves in self.modules so a future
+            -- call can reactivate them, but their draw() shouldn't paint anything
+            -- while they're dormant. Without this guard the polygons and large
+            -- filled text from the most recent module leak through over whatever
+            -- the next room is supposed to show.
+            if module.active then module:draw() end
+        end
 
         camera:detach()
     love.graphics.setCanvas()
 
     love.graphics.setCanvas(self.temp_canvas)
     love.graphics.clear()
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.setBlendMode("alpha", "premultiplied")
-        love.graphics.setShader(shaders.glitch)
-        shaders.glitch:send('glitch_map', self.glitch_canvas)
-        love.graphics.draw(self.main_canvas, 0, 0, 0, 1, 1)
-        love.graphics.setShader()
-  		love.graphics.setBlendMode("alpha")
+        if scanlines_enabled and not disable_expensive_shaders then
+            -- glitch shader pass: displaces pixels according to glitch_canvas
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.setBlendMode("alpha", "premultiplied")
+            love.graphics.setShader(shaders.glitch)
+            shaders.glitch:send('glitch_map', self.glitch_canvas)
+            love.graphics.draw(self.main_canvas, 0, 0, 0, 1, 1)
+            love.graphics.setShader()
+            love.graphics.setBlendMode("alpha")
+        else
+            -- Effects off: blit main_canvas straight into temp_canvas.
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.draw(self.main_canvas, 0, 0, 0, 1, 1)
+        end
     love.graphics.setCanvas()
 
     love.graphics.setCanvas(self.final_canvas)
     love.graphics.clear()
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.setBlendMode("alpha", "premultiplied")
-        love.graphics.setShader(shaders.rgb_shift)
-        shaders.rgb_shift:send('amount', {random(-self.rgb_shift_mag, self.rgb_shift_mag)/gw, random(-self.rgb_shift_mag, self.rgb_shift_mag)/gh})
-        love.graphics.draw(self.temp_canvas, 0, 0, 0, 1, 1)
-        love.graphics.setShader()
-  		love.graphics.setBlendMode("alpha")
+        if scanlines_enabled and not disable_expensive_shaders then
+            -- rgb_shift shader pass: per-channel line offset
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.setBlendMode("alpha", "premultiplied")
+            love.graphics.setShader(shaders.rgb_shift)
+            shaders.rgb_shift:send('amount', {random(-self.rgb_shift_mag, self.rgb_shift_mag)/gw, random(-self.rgb_shift_mag, self.rgb_shift_mag)/gh})
+            love.graphics.draw(self.temp_canvas, 0, 0, 0, 1, 1)
+            love.graphics.setShader()
+            love.graphics.setBlendMode("alpha")
+        else
+            -- Effects off: blit temp_canvas into final_canvas without
+            -- any per-channel separation.
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.draw(self.temp_canvas, 0, 0, 0, 1, 1)
+        end
     love.graphics.setCanvas()
 
-    if not disable_expensive_shaders then
+    if scanlines_enabled and not disable_expensive_shaders then
+        -- distort shader pass: scanlines + horizontal fuzz + rgb offset
         love.graphics.setShader(shaders.distort)
         shaders.distort:send('time', time)
         shaders.distort:send('horizontal_fuzz', 0.2*(distortion/10))
         shaders.distort:send('rgb_offset', 0.2*(distortion/10))
+        shaders.distort:send('scanlines', scanlines_enabled and 1 or 0)
     end
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setBlendMode('alpha', 'premultiplied')
@@ -166,7 +191,40 @@ function Console:draw()
 end
 
 function Console:destroy()
-    
+    -- Hide the main menu first so its GUI cell doesn't ghost under whatever
+    -- next room replaces this one.
+    self:_hideMainMenu()
+    self.main_menu = nil
+
+    -- Tear down every active module (EscapeModule / HelpModule /
+    -- DeviceModule / ShutdownModule / ClearModule) so its update/draw
+    -- callbacks stop running.
+    if self.modules then
+        for _, mod in ipairs(self.modules) do
+            if mod.destroy then mod:destroy() end
+        end
+        self.modules = {}
+    end
+
+    -- Wipe pending timer callbacks (DeviceModule schedules several
+    -- self.timer:after(...) lines for its body text). If we don't clear
+    -- them, they keep firing on the *next* Console instance and dump
+    -- their text into self.lines as ghost content.
+    if self.timer and self.timer.clear then self.timer:clear() end
+
+    -- Reset camera state so the next room's camera:lookAt() is the only
+    -- thing modifying it.
+    if camera and camera.lookAt then camera:lookAt(gw/2, gh/2) end
+    if Camera.smooth and Camera.smooth.damped and camera.smoother then
+        camera.smoother = Camera.smooth.none and Camera.smooth.none() or nil
+    end
+    if camera then camera.scale = 1 end
+
+    -- Drop any in-flight module lines that landed in self.lines.
+    self.lines = {}
+    self.line_y = 0
+    self.input_line = nil
+    self.scrolling_y = nil
 end
 
 function Console:addLine(after, text, duration, swaps)
@@ -282,6 +340,16 @@ end
 -- self.main_menu so a single draw() can render it on the same canvas as the
 -- console text.
 function Console:_showMainMenu(opts)
+    -- Wipe any module text that was pushed into self.lines by previous
+    -- menu sessions (DeviceModule, HelpModule, EscapeModule, etc.). These
+    -- would otherwise ghost behind the new menu because they're already in
+    -- self.lines and we don't tear down the menu on every redraw.
+    self.lines = {}
+    self.line_y = 0
+    self.input_line = nil
+    self.scrolling_y = nil
+    self.glitches = {}
+
     self.main_menu = {
         x = opts.x, y = opts.y,
         w = opts.w, h = opts.h,

@@ -118,6 +118,11 @@ function love.load()
     disable_expensive_shaders = false
     pre_disable_expensive_shaders = false
     disable_expensive_shaders_time = 0
+    -- scanlines toggle (loaded from save / default false). Pushed into the
+    -- distort shader's `scanlines` uniform: 0 disables, 1 full strength.
+    -- Default to OFF so the save-file-less user gets a clean image; the
+    -- Option room toggles it.
+    scanlines_enabled = (scanlines_enabled == nil) and false or scanlines_enabled
 
     playRandomSong()
 
@@ -344,6 +349,7 @@ function save()
     permanent_save_data.display_mode = display_mode
     permanent_save_data.display = display
     permanent_save_data.window_scale = window_scale
+    permanent_save_data.scanlines_enabled = scanlines_enabled
     permanent_save_data.achievements = achievements
 
     transient_save_data.skill_points = skill_points
@@ -399,6 +405,7 @@ function load()
         display_mode = save_data.display_mode or (save_data.fullscreen and 'desktop' or 'windowed')
         display = save_data.display
         window_scale = save_data.window_scale or sx or 2
+        scanlines_enabled = (save_data.scanlines_enabled == nil) and false or save_data.scanlines_enabled
         achievements = save_data.achievements
     end
 
