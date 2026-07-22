@@ -47,11 +47,11 @@ xattr -dr com.apple.quarantine /Applications/bytepath-ex.app
 
 ---
 
-## 원본과의 차이점 (v0.1.0)
+## 원본과의 차이점 (v0.2.1)
 
 원작은 LÖVE 0.10.2 시대를 기준으로 빌드됐기 때문에, brew/공식 설치본으로 받는 최신 LÖVE 11.5에서는 부팅조차 되지 않습니다. 본 포크는 게임플레이를 1도 건드리지 않고 11.5에서 실행되도록 하는 데 집중했습니다.
 
-`master` 브랜치에는 upstream HEAD `a327ex/BYTEPATH@51ee308` 위에 다섯 개의 의미 있는 커밋이 올라가 있습니다:
+현재 안정 버전은 **v0.2.1**입니다. upstream HEAD `a327ex/BYTEPATH@51ee308`을 기반으로 LÖVE 11.5 호환, 화면 모드 설정, UI 및 뷰포트 수정이 적용되어 있습니다.
 
 | 커밋 | 영역 | 이유 |
 | --- | --- | --- |
@@ -93,7 +93,7 @@ xattr -dr com.apple.quarantine /Applications/bytepath-ex.app
 
 ## 빌드 방법 (macOS)
 
-`build_love.sh`는 `love`를 `.app` 번들로 묶고 `ditto`로 zip까지 만들어 주는 스크립트입니다. (v0.2.0에서 추가 예정)
+현재 저장소에는 자동 패키징 스크립트가 포함되어 있지 않습니다. 아래 명령으로 `.love`와 `.app` 번들을 수동 생성할 수 있습니다.
 
 ```bash
 # 수동 빌드 예시
@@ -101,7 +101,7 @@ zip -qr /tmp/bytepath-ex.love . -x "*.DS_Store" -x ".git/*"
 cp -R /Applications/love.app ./bytepath-ex.app
 cp /tmp/bytepath-ex.love ./bytepath-ex.app/Contents/Resources/game.love
 # Info.plist의 CFBundleName / CFBundleIdentifier 만 교체
-ditto -c -k --sequesterRsrc --keepParent bytepath-ex.app bytepath-ex-macos-0.1.0.zip
+ditto -c -k --sequesterRsrc --keepParent bytepath-ex.app bytepath-ex-macos-0.2.1.zip
 ```
 
 ---
