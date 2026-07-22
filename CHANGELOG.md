@@ -2,6 +2,44 @@
 
 Upstream release `v0.0.0` (master @ a327ex/BYTEPATH `51ee308`).
 
+## v0.2.1 — UI / viewport fixes (2026-07-22)
+
+Shader/screen regressions fixed across the menus, Classes, and the
+passive skill tree after the v0.2.0 display options landed. The bytepath
+main menu was rebuilt as a single GUI panel (keyboard only).
+
+### Fixed
+- `rooms/Classes.lua`: `self.rgb_canvas` was never created, so
+  `setCanvas(self.rgb_canvas)` in `Classes:draw` blew up silently and
+  filled the viewport with the glitch/distort pass. Color values were
+  normalized to 0..1 and the shader pipeline was bypassed (same path
+  SkillTree takes). The whole viewport is now drawn into
+  `self.render_canvas` and blitted to the window via `drawGameCanvas()`
+  so it fills the live window instead of sitting in the top-left.
+- `rooms/SkillTree.lua`: same fix as Classes — added
+  `self.render_canvas`, bypassed the shader pipeline, color-normalized,
+  automatic fit (P5–P95 range, scaled so the bulk of nodes fills the
+  viewport). Added an `Enter` keybinding that picks the screen-visible
+  node closest to viewport-center and buys it on the same frame.
+- `rooms/Console.lua`: same fix as Classes — added `self.render_canvas`.
+- `objects/Node.lua`: clearer color per state (bought, keyboard-selected,
+  hover) so the purchased path is unambiguous. All `setColor` calls
+  normalized to 0..1. Bottom-edge highlight suppressed.
+- `objects/Line.lua`: idle / purchased / keyboard-selected link colors
+  unified so the whole purchased path reads in one accent.
+
+### Changed
+- `rooms/Console.lua`: the bytepath main menu is now a single GUI panel
+  drawn in viewport coords (no more per-line cursor that drifted past
+  the screen bottom). Keyboard-only:
+  - **Arrow keys** move the selection (wraparound)
+  - **Enter** activates the current row
+  - **1-8** jump directly to a row
+  - Mouse support was removed because window→viewport coord mapping
+    was unreliable inside the shader pipeline.
+- Menu items in execution order: **start, classes, device, passives,
+  terminal, options, help, shutdown**.
+
 ## v0.2.0 — Display options (windowed / fullscreen / scale) — 2026-07-22
 
 Window options UI: pick between windowed, fullscreen and borderless

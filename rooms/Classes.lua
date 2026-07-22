@@ -3,12 +3,22 @@ Classes = Object:extend()
 function Classes:new()
     self.timer = Timer()
     self.area = Area(self)
-    
+
+    -- Reset camera state from whatever previous room left behind.
+    camera:lookAt(gw/2, gh/2)
+    camera.scale = 1
+    if Camera.smooth and Camera.smooth.damped then
+        camera.smoother = Camera.smooth.none and Camera.smooth.none() or nil
+    end
+
     self.font = fonts.Anonymous_8
     self.main_canvas = love.graphics.newCanvas(gw, gh)
     self.final_canvas = love.graphics.newCanvas(gw, gh)
     self.temp_canvas = love.graphics.newCanvas(gw, gh)
     self.glitch_canvas = love.graphics.newCanvas(gw, gh)
+    self.rgb_canvas = love.graphics.newCanvas(gw, gh)
+    -- Single offscreen target so the viewport fits the live window via drawGameCanvas.
+    self.render_canvas = love.graphics.newCanvas(gw, gh)
     self.rgb_shift_mag = 0
 
     self.classes = {
@@ -473,47 +483,36 @@ function Classes:update(dt)
 end
 
 function Classes:draw()
-    love.graphics.setCanvas(self.glitch_canvas)
-    love.graphics.clear()
-        love.graphics.setColor(127, 127, 127)
-        love.graphics.rectangle('fill', 0, 0, gw, gh)
-        love.graphics.setColor(255, 255, 255)
-        self.area:drawOnly({'glitch'})
-    love.graphics.setCanvas()
-
-    love.graphics.setCanvas(self.rgb_canvas)
-    love.graphics.clear()
-    	camera:attach(0, 0, gw, gh)
-        love.graphics.setColor(127, 127, 127)
-        love.graphics.rectangle('fill', 0, 0, gw, gh)
-        love.graphics.setColor(255, 255, 255)
-    	self.area:drawOnly({'rgb'})
-    	camera:detach()
-    love.graphics.setCanvas()
-
+    -- Same render pattern as SkillTree: paint the viewport into self.render_canvas
+    -- (480×270), then hand it to drawGameCanvas so the viewport fills the live
+    -- window via the standard letterbox scaling instead of just sitting in the
+    -- top-left corner.
     love.graphics.setFont(self.font)
-    love.graphics.setCanvas(self.main_canvas)
-    love.graphics.clear()
-
-    --[[
-    love.graphics.line(8 + gw/2 + 32, 0, 8 + gw/2 + 32, gh)
-    love.graphics.line(8 + gw/2 + 32 + 4, 0, 8 + gw/2 + 32 + 4, gh)
-    ]]--
+    love.graphics.setCanvas(self.render_canvas)
+    love.graphics.clear(0, 0, 0, 1)
+    camera:attach(0, 0, gw, gh)
 
     local drawNormalButton = function(x, y, w, h, text, color)
-        drawCenteredRectangle('fill', x, y, w, h, {16, 16, 16})
-        drawCenteredRectangle('line', x, y, w, h, {4, 4, 4})
-        printCenteredText(text, x, y, self.font, color)
+        -- color: {r,g,b} 0..1 expected; caller passes globals that are 0..255 — divide here
+        local function to01(c) return {c[1]/255, c[2]/255, c[3]/255} end
+        drawCenteredRectangle('fill', x, y, w, h, {16/255, 16/255, 16/255})
+        drawCenteredRectangle('line', x, y, w, h, {4/255, 4/255, 4/255})
+        printCenteredText(text, x, y, self.font, to01(color or default_color))
     end
 
     local drawInvertedButton = function(x, y, w, h, text, color)
-        drawCenteredRectangle('fill', x, y, w, h, {222, 222, 222})
-        drawCenteredRectangle('line', x, y, w, h, {255, 255, 255})
-        printCenteredText(text, x, y, self.font, {16, 16, 16})
+        -- Inverted = light fill, dark text. Always readable regardless of selection state.
+        drawCenteredRectangle('fill', x, y, w, h, {222/255, 222/255, 222/255})
+        drawCenteredRectangle('line', x, y, w, h, {1, 1, 1})
+        printCenteredText(text, x, y, self.font, {16/255, 16/255, 16/255})
+        -- Selection marker: drawn AFTER the button so it sits on top of the glitch/distort.
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print('>', x - w/2 - 6, y - 4)
+        love.graphics.print('<', x + w/2 + 1, y - 4)
     end
 
     -- for i = 1, 9 do love.graphics.rectangle('line', 8, 50 + (i-1)*24, gw/2 + gw/6, 20) end
-    for i = 1, rank do 
+    for i = 1, rank do
         if i == 10 then goto continue end
         local n = 3
         if i == 1 then n = 4 end
@@ -522,7 +521,7 @@ function Classes:draw()
         if i >= 7 and i <= 8 then n = 4 end
         if i == 9 then n = 4 end
         local y = 28 + (i-1)*24 + 10
-        drawNormalButton(8 + 24, y, 48, 16, 'Rank ' .. i, default_color) 
+        drawNormalButton(8 + 24, y, 48, 16, 'Rank ' .. i, default_color)
         if not classes[i] then drawNormalButton(8 + 24 + 56, y, 64, 16, 'COST: ' .. tostring(rank*5) .. 'SP', skill_point_color) end
         if classes[i] then drawNormalButton(8 + 24 + 48, y, 48, 16, classes[i], self.class_colors[classes[i]])
         else
@@ -534,13 +533,18 @@ function Classes:draw()
     end
     ::continue::
 
-    if self.visible then
-        if rank < 10 then
-            local offset = 0
-            if rank == 1 then offset = 48 end
-            local x, y = offset + 8 + gw/2 + 32 + 12, 38
-            for i, line in ipairs(self.class_info[self.classes[rank][self.selection_index]]) do
-                love.graphics.print(line, x, y + 12*(i-1), 0, 1, 1, 0, self.font:getHeight()/2)
+    if self.visible and rank < 10 and self.classes[rank] and self.classes[rank][self.selection_index] then
+        local offset = 0
+        if rank == 1 then offset = 48 end
+        local x, y = offset + 8 + gw/2 + 32 + 12, 38
+        local info = self.class_info[self.classes[rank][self.selection_index]]
+        if info then
+            -- Background plate so text is always readable on top of glitch/distort artifacts
+            love.graphics.setColor(0, 0, 0, 0.55)
+            love.graphics.rectangle('fill', x - 6, y - 6, gw - x - 8, #info * 12 + 4)
+            for i, line_text in ipairs(info) do
+                love.graphics.setColor(1, 1, 1)
+                love.graphics.print(line_text, x, y + 12*(i-1), 0, 1, 1, 0, self.font:getHeight()/2)
             end
         end
     end
@@ -550,66 +554,40 @@ function Classes:draw()
     local text = 'CONSOLE'
     local w = self.font:getWidth(text)
     local x, y = gw - w - 15, 5
-    love.graphics.setColor(0, 0, 0, 222)
-    love.graphics.rectangle('fill', x, y, w + 10, 16) 
-    love.graphics.setColor(255, 255, 255, 255)
+    love.graphics.setColor(0, 0, 0, 222/255)
+    love.graphics.rectangle('fill', x, y, w + 10, 16)
+    love.graphics.setColor(1, 1, 1)
     love.graphics.print(text, x + 5, y + 3)
     if pmx >= sx*x and pmx <= sx*(x + w + 10) and pmy >= sy*y and pmy <= sy*(y + 16) then love.graphics.rectangle('line', x, y, w + 10, 16) end
 
-    love.graphics.setColor(default_color)
+    love.graphics.setColor(1, 1, 1)
     love.graphics.print('~ CLASSES:', 8, 10)
-    love.graphics.setColor(skill_point_color)
+    love.graphics.setColor({skill_point_color[1]/255, skill_point_color[2]/255, skill_point_color[3]/255})
     love.graphics.print('~ SP: ' .. tostring(skill_points), 8, gh - 20)
-    love.graphics.setColor(default_color)
+    love.graphics.setColor(1, 1, 1)
 
     -- Can't buy
     if self.cant_buy_error then
         local text = self.cant_buy_error
         local w = self.font:getWidth(text)
         local x, y = gw/2 - w/2 - 5, gh/2 - 12
-        love.graphics.setColor(hp_color)
+        local r, g, b = hp_color[1]/255, hp_color[2]/255, hp_color[3]/255
+        love.graphics.setColor(r, g, b, 0.9)
         love.graphics.rectangle('fill', x, y, w + 10, 24)
-        love.graphics.setColor(background_color)
+        love.graphics.setColor(0, 0, 0)
         love.graphics.print(text, math.floor(x + 5), math.floor(y + 8))
     end
 
-    love.graphics.setColor(skill_point_color)
+    local r, g, b = skill_point_color[1]/255, skill_point_color[2]/255, skill_point_color[3]/255
+    love.graphics.setColor(r, g, b)
     love.graphics.print(skill_points .. 'SP', gw - 20, 26, 0, 1, 1, math.floor(self.font:getWidth(skill_points .. 'SP')/2), math.floor(self.font:getHeight()/2))
-    love.graphics.setCanvas()
+    love.graphics.setColor(1, 1, 1)
 
-    love.graphics.setCanvas(self.temp_canvas)
-    love.graphics.clear()
-        love.graphics.setColor(255, 255, 255)
-        love.graphics.setBlendMode("alpha", "premultiplied")
-        love.graphics.setShader(shaders.glitch)
-        shaders.glitch:send('glitch_map', self.glitch_canvas)
-        love.graphics.draw(self.main_canvas, 0, 0, 0, 1, 1)
-        love.graphics.setShader()
-  		love.graphics.setBlendMode("alpha")
-    love.graphics.setCanvas()
+    camera:detach()
 
-    love.graphics.setCanvas(self.final_canvas)
-    love.graphics.clear()
-        love.graphics.setColor(255, 255, 255)
-        love.graphics.setBlendMode("alpha", "premultiplied")
-        love.graphics.setShader(shaders.rgb_shift)
-        shaders.rgb_shift:send('amount', {random(-self.rgb_shift_mag, self.rgb_shift_mag)/gw, random(-self.rgb_shift_mag, self.rgb_shift_mag)/gh})
-        love.graphics.draw(self.temp_canvas, 0, 0, 0, 1, 1)
-        love.graphics.setShader()
-  		love.graphics.setBlendMode("alpha")
+    -- Hand the viewport off to drawGameCanvas so it fills the live window.
     love.graphics.setCanvas()
-
-    if not disable_expensive_shaders then
-        love.graphics.setShader(shaders.distort)
-        shaders.distort:send('time', time)
-        shaders.distort:send('horizontal_fuzz', 0.2*(distortion/10))
-        shaders.distort:send('rgb_offset', 0.2*(distortion/10))
-    end
-    love.graphics.setColor(255, 255, 255, 255)
-    love.graphics.setBlendMode('alpha', 'premultiplied')
-    love.graphics.draw(self.final_canvas, 0, 0, 0, sx, sy)
-    love.graphics.setBlendMode('alpha')
-    love.graphics.setShader()
+    drawGameCanvas(self.render_canvas)
 end
 
 function Classes:destroy()

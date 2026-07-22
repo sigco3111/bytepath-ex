@@ -16,3 +16,4 @@ permanent_save
 # Build artifacts
 bytepath-ex.app/
 bytepath-ex-macos-*.zip
+bytepath-ex-*.love

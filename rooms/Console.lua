@@ -68,54 +68,40 @@ function Console:update(dt)
         if self.glitches[i].dead then table.remove(self.glitches, i) end
     end
 
-    if self.bytepath_main_active then
+    -- GUI main-menu input. Keyboard-only: arrows move the selection, Enter
+    -- activates, 1-8 jump to that row. (Mouse support was removed because
+    -- the window→viewport coordinate mapping made hover detection unreliable
+    -- in this room's shader pipeline.)
+    if self.main_menu and self.main_menu.visible then
+        local m = self.main_menu
+        local n = #m.titles
+
         if input:pressed('up') then
-            self.bytepath_main_selection_index = self.bytepath_main_selection_index - 1
-            if self.bytepath_main_selection_index == 0 then self.bytepath_main_selection_index = #self.bytepath_main_selection_widths end
+            m.selection_index = m.selection_index - 1
+            if m.selection_index < 1 then m.selection_index = n end
             playMenuSwitch()
         end
-
         if input:pressed('down') then
-            self.bytepath_main_selection_index = self.bytepath_main_selection_index + 1
-            if self.bytepath_main_selection_index == 9 then self.bytepath_main_selection_index = 1 end
+            m.selection_index = m.selection_index + 1
+            if m.selection_index > n then m.selection_index = 1 end
             playMenuSwitch()
         end
 
-        if input:pressed('return') then
-            self:rgbShift()
-            self.bytepath_main = false
-            local command = self.bytepath_main_texts[self.bytepath_main_selection_index]
-            for i = 1, #command do
-                local c = command:sub(i, i)
-                self.timer:after(0.025*i, function() love.event.push('keypressed', c) end)
-            end
-            self.timer:after(0.025*(#command+1) + 0.25, function() 
-                if self.input_line then 
-                    self.input_line:enter() 
-                    playKeystroke()
-                    self:rgbShift()
-                end 
-            end)
-        end
+        -- Numeric hotkeys (1..8): jump to that index and execute.
+        if input:pressed('1') then self:_runMainMenu(1) end
+        if input:pressed('2') then self:_runMainMenu(2) end
+        if input:pressed('3') then self:_runMainMenu(3) end
+        if input:pressed('4') then self:_runMainMenu(4) end
+        if input:pressed('5') then self:_runMainMenu(5) end
+        if input:pressed('6') then self:_runMainMenu(6) end
+        if input:pressed('7') then self:_runMainMenu(7) end
+        if input:pressed('8') then self:_runMainMenu(8) end
 
-        if input:pressed('start') then
-            self:rgbShift()
-            local command = 'start'
-            self:addToCommandHistory(command)
-            for i = 1, #command do
-                local c = command:sub(i, i)
-                self.timer:after(0.025*i, function() love.event.push('keypressed', c) end)
-            end
-            self.timer:after(0.025*(#command+1) + 0.25, function() 
-                if self.input_line then 
-                    self.input_line:enter() 
-                    playKeystroke()
-                    self:rgbShift()
-                end 
-            end)
+        -- Return/enter triggers the current selection.
+        if input:pressed('return') then
+            self:_runMainMenu(m.selection_index)
         end
     end
-    if not self.bytepath_main then self.bytepath_main_active = false end
 end
 
 function Console:draw()
@@ -133,14 +119,6 @@ function Console:draw()
         for _, line in ipairs(self.lines) do line:draw() end
         for _, module in ipairs(self.modules) do module:draw() end
 
-        if self.bytepath_main_active then
-            local width = self.bytepath_main_selection_widths[self.bytepath_main_selection_index]
-            local r, g, b = unpack(hp_color)
-            love.graphics.setColor(r, g, b, 128/255)
-            local x_offset = self.font:getWidth('~ type ')
-            love.graphics.rectangle('fill', 8 + x_offset - 2, self.bytepath_main_y + self.bytepath_main_selection_index*12 - 7, width + 4, self.font:getHeight())
-            love.graphics.setColor(1, 1, 1, 1)
-        end
         camera:detach()
     love.graphics.setCanvas()
 
@@ -175,6 +153,14 @@ function Console:draw()
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setBlendMode('alpha', 'premultiplied')
     drawGameCanvas(self.final_canvas)
+
+    -- GUI main menu: drawn AFTER the shader pipeline so the rectangle isn't
+    -- smeared by glitch/rgb_shift/distort. We render in viewport coords
+    -- (gw × 270) and rely on drawGameCanvas having already painted; the
+    -- drawGameCanvas call above sets setCanvas() to default (the back buffer),
+    -- so we paint directly into the window here.
+    self:_drawMainMenu()
+
     love.graphics.setBlendMode('alpha')
     love.graphics.setShader()
 end
@@ -186,14 +172,30 @@ end
 function Console:addLine(after, text, duration, swaps)
     self.timer:after(after, function()
         if text ~= '' then playComputerLine() end
-        if self.bytepath_main then 
+        if self.bytepath_main then
             if text == '~ type @help# for help' then
                 self.bytepath_main_y = self.line_y
             end
         end
         table.insert(self.lines, ConsoleLine(8, self.line_y, {text = text, duration = duration, swaps = swaps}))
         self.line_y = self.line_y + 12
-        if self.line_y > gh then camera:lookAt(camera.x, camera.y + 12) end 
+        if self.line_y > gh then camera:lookAt(camera.x, camera.y + 12) end
+    end)
+end
+
+-- Shared buffer for capturing the ConsoleLine inserted by the next addLine call.
+-- This must be set just before the addLine that we want to grab. Then on the
+-- NEXT frame the timer fires, insert happens, and we hook into the result by
+-- peeking at self.lines[#self.lines]. The hook below sets a field while the
+-- timer is pending.
+function Console:_captureNextLine(key)
+    -- Use a poll-and-cache: when draw runs (after timer fires), the line is
+    -- already in self.lines, so we resolve by recency.
+    local last_count = #self.lines
+    self.timer:after(0.001, function()
+        if #self.lines > last_count and not self.bytepath_main_menu_lines[key] then
+            self.bytepath_main_menu_lines[key] = self.lines[#self.lines]
+        end
     end)
 end
 
@@ -234,105 +236,255 @@ function Console:isConsoleCharacter(key)
 end
 
 function Console:bytepathMain(delay)
-    local delay = delay or 0 
-    local classes_string = ''
-    for _, class in ipairs(classes) do
-        if class_colors[class] == ammo_color then
-            classes_string = classes_string .. '<' .. class .. '> - '
-        elseif class_colors[class] == hp_color then
-            classes_string = classes_string .. '@' .. class .. '# - '
-        elseif class_colors[class] == boost_color then
-            classes_string = classes_string .. '$' .. class .. '% - '
-        elseif class_colors[class] == default_color then
-            classes_string = classes_string .. class .. ' - '
-        elseif class_colors[class] == skill_point_color then
-            classes_string = classes_string .. ';' .. class .. ', - '
-        end
-    end
-
-    self:addLine(delay + 0.02, ':: running $BYTEPATH [byte]% in SAFE MODE')
-    self:addLine(delay + 0.04, ':: ' .. os.date("%a %b %d ") .. tostring(tonumber(os.date("%Y"))+1000) .. os.date(" %X ") .. 'on ;VCON1,')
-    self:addLine(delay + 0.06, '')
-    self:addLine(delay + 0.08, 'Welcome to $BYTEPATH v1.0% - <' .. string.sub(id, 1, 8) .. '>!')
-    self:addLine(delay + 0.10, '')
-    if loop > 0 then
-        self:addLine(delay + 0.12, '$LOOP: ' .. loop .. '% ~~ +10 SP / +5 MAX TREE NODES PER LOOP ~~ UP TO 5 LOOPS')
-    end
-    self:addLine(delay + 0.14, ';SP: ' .. skill_points .. ',')
-    self:addLine(delay + 0.16, '$CURRENT DEVICE: ' .. device .. '%')
-    self:addLine(delay + 0.18, 'CLASSES: ' .. classes_string) 
-    self:addLine(delay + 0.20, 'LAST SCORE: ' .. score)
-    self:addLine(delay + 0.22, 'HIGH SCORE: ' .. high_score)
-    self:addLine(delay + 0.24, '')
-    self:addLine(delay + 0.26, 'Your objective is to escape this terminal by reaching difficulty 40 and finding all keys.')
-    self:addLine(delay + 0.28, '~ type @escape# to escape')
-    self:addLine(delay + 0.32, '~ type @start# to start the simulation with the current device')
-    self:addLine(delay + 0.34, '~ type @help# to view all builtin commands')
-    self:addLine(delay + 0.36, '~ type @classes# to view the class window')
-    self:addLine(delay + 0.38, '~ type @device# to select a new device')
-    self:addLine(delay + 0.40, '~ type @passives# to view the passive skill tree')
-    self:addLine(delay + 0.42, '~ type @options# to view display / window options')
-    self:addLine(delay + 0.44, '~ type @shutdown# to quit the game')
-    self:addLine(delay + 0.46, '')
-    self:addInputLine(delay + 0.44, '[;root,]arch~ ')
-
-    self.timer:after(delay, function()
-        self.bytepath_main = true
-        self.bytepath_main_active = false
-        self.bytepath_main_selection_index = 1
-        self.bytepath_main_texts = {'escape', 'start', 'help', 'classes', 'device', 'passives', 'options', 'shutdown'}
-        self.bytepath_main_selection_widths = {self.font:getWidth('escape'), self.font:getWidth('start'), self.font:getWidth('help'), self.font:getWidth('classes'), self.font:getWidth('device'), self.font:getWidth('passives'), self.font:getWidth('options'), self.font:getWidth('shutdown')}
-        if loop > 0 then self.bytepath_main_y = self.line_y + 13*12
-        else self.bytepath_main_y = self.line_y + 13*12 - 12 end
-        self.timer:after(0.38, function() self.bytepath_main_active = true end)
-    end)
+    local delay = delay or 0
+    self:_hideMainMenu()
+    self:_showMainMenu({
+        x = 12, y = 84,
+        w = gw - 96, h = 22,
+        spacing = 4,
+        titles = {
+            {key = 'start',     label = 'start',     desc = 'to start the simulation'},
+            {key = 'classes',   label = 'classes',   desc = 'to view the class window'},
+            {key = 'device',    label = 'device',    desc = 'to select a new device'},
+            {key = 'passives',  label = 'passives',  desc = 'to view the passive skill tree'},
+            {key = 'terminal',  label = 'terminal',  desc = 'to escape this terminal'},
+            {key = 'options',   label = 'options',   desc = 'to view display / window options'},
+            {key = 'help',      label = 'help',      desc = 'to view all builtin commands'},
+            {key = 'shutdown',  label = 'shutdown',  desc = 'to quit the game'},
+        },
+        delay = delay,
+    })
 end
 
 function Console:bytepathMain2()
-    local delay = delay or 0 
-    local classes_string = ''
-    for _, class in ipairs(classes) do
-        if class_colors[class] == ammo_color then
-            classes_string = classes_string .. '<' .. class .. '> - '
-        elseif class_colors[class] == hp_color then
-            classes_string = classes_string .. '@' .. class .. '# - '
-        elseif class_colors[class] == boost_color then
-            classes_string = classes_string .. '$' .. class .. '% - '
-        elseif class_colors[class] == default_color then
-            classes_string = classes_string .. class .. ' - '
-        elseif class_colors[class] == skill_point_color then
-            classes_string = classes_string .. ';' .. class .. ', - '
+    local delay = delay or 0
+    self:_hideMainMenu()
+    self:_showMainMenu({
+        x = 12, y = 72,
+        w = gw - 96, h = 22,
+        spacing = 4,
+        titles = {
+            {key = 'start',     label = 'start',     desc = 'to start the simulation'},
+            {key = 'classes',   label = 'classes',   desc = 'to view the class window'},
+            {key = 'device',    label = 'device',    desc = 'to select a new device'},
+            {key = 'passives',  label = 'passives',  desc = 'to view the passive skill tree'},
+            {key = 'terminal',  label = 'terminal',  desc = 'to escape this terminal'},
+            {key = 'options',   label = 'options',   desc = 'to view display / window options'},
+            {key = 'help',      label = 'help',      desc = 'to view all builtin commands'},
+            {key = 'shutdown',  label = 'shutdown',  desc = 'to quit the game'},
+        },
+        delay = delay,
+    })
+end
+
+-- Show a single-column GUI menu in the viewport. Both keyboard (up/down/return
+-- + hotkey 1–8) and mouse (hover/click) work. The active menu state is held in
+-- self.main_menu so a single draw() can render it on the same canvas as the
+-- console text.
+function Console:_showMainMenu(opts)
+    self.main_menu = {
+        x = opts.x, y = opts.y,
+        w = opts.w, h = opts.h,
+        spacing = opts.spacing or 4,
+        titles = opts.titles,
+        selection_index = 1,
+        hovered_index = nil,
+        visible = true,
+    }
+    self.main_menu_texts = {}
+    for i, t in ipairs(opts.titles) do
+        self.main_menu_texts[i] = t.key
+    end
+    -- Action map: the function that runs when a specific entry is triggered.
+    self.main_menu_actions = {
+        terminal = function() local m = EscapeModule(self, self.line_y); table.insert(self.modules, m); playMenuSelect() end,
+        start    = function() gotoRoom('Stage'); playMenuSelect() end,
+        help     = function() self:help(); playMenuSelect() end,
+        classes  = function() gotoRoom('Classes'); playMenuSelect() end,
+        device   = function() table.insert(self.modules, DeviceModule(self, self.line_y)); playMenuSelect() end,
+        passives = function() gotoRoom('SkillTree'); playMenuSelect() end,
+        shutdown = function() table.insert(self.modules, ShutdownModule(self, self.line_y)); playMenuSelect() end,
+        options  = function() gotoRoom('Options'); playMenuSelect() end,
+    }
+    if opts.delay and opts.delay > 0 then
+        self.timer:after(opts.delay, function() self.main_menu.visible = true end)
+        self.main_menu.visible = false
+    end
+end
+
+function Console:_hideMainMenu()
+    self.main_menu = nil
+    self.main_menu_texts = nil
+    self.main_menu_actions = nil
+    self.bytepath_main = false
+end
+
+-- Bounding-box origin (in viewport coords) of the i-th menu cell.
+function Console:_mainMenuCell(i)
+    local m = self.main_menu
+    return m.x, m.y + (i - 1) * (m.h + m.spacing)
+end
+
+-- Execute the action at index i and close the menu.
+function Console:_runMainMenu(i)
+    local m = self.main_menu
+    if not m then return end
+    local key = m.titles[i].key
+    local act = self.main_menu_actions and self.main_menu_actions[key]
+    self:rgbShift()
+    -- Hide first so the action that opens e.g. Options doesn't paint the menu
+    -- over the new screen for one frame.
+    self:_hideMainMenu()
+    if act then act() end
+end
+
+-- Draw the GUI main menu on top of the shader-painted canvas. All cells are
+-- drawn in viewport coordinates (gw × gh); the existing drawGameCanvas()
+-- pipeline in Console:draw handles the window letterbox scaling.
+--
+-- Column layout per row (within the cell, x progresses left → right):
+--   • 3 px accent bar (selected only) — drawn just outside the cell, left
+--   • INDEX "01".."08" — column 0..16
+--   • vertical separator at x=16
+--   • LABEL — column 20..100 (fixed so long labels can't bleed into desc)
+--   • DESCRIPTION — column 104..(W-28)
+--   • HOTKEY "[1]"..["8"] — column (W-22)..(W-6)
+--   • chevron — only on selected row, drawn just outside the cell, right
+function Console:_drawMainMenu()
+    local m = self.main_menu
+    if not m or not m.visible then return end
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setBlendMode('alpha')
+    love.graphics.setShader()
+
+    local n = #m.titles
+    local accent_w = 3
+    local index_w = 16
+    local label_w = 80
+    local hotkey_w = 22
+    local row_h = m.h
+
+    -- Background plate so the menu is readable above glitch/noise.
+    local total_h = n * (row_h + m.spacing) - m.spacing + 8
+    love.graphics.setColor(0, 0, 0, 0.78)
+    love.graphics.rectangle('fill', m.x - 6, m.y - 6, m.w + 12, total_h)
+    love.graphics.setColor(80/255, 80/255, 80/255, 1)
+    love.graphics.setLineWidth(1)
+    love.graphics.rectangle('line', m.x - 6, m.y - 6, m.w + 12, total_h)
+    love.graphics.setLineWidth(1)
+
+    -- Geometry inside each cell.
+    local idx_col  = m.x + 4
+    local sep_x    = m.x + index_w
+    local label_x  = m.x + index_w + 6
+    local desc_x   = label_x + label_w + 12
+    local desc_max_w = (m.w - (desc_x - m.x)) - hotkey_w - 8
+    local hk_x     = m.x + m.w - hotkey_w - 4
+
+    for i, title in ipairs(m.titles) do
+        local cell_x, cell_y = self:_mainMenuCell(i)
+        local is_selected = i == m.selection_index
+        local is_hovered  = i == m.hovered_index
+
+        -- Cell fill.
+        local cell_fill
+        if is_selected then
+            cell_fill = {skill_point_color[1]/255, skill_point_color[2]/255, skill_point_color[3]/255, 0.30}
+        elseif is_hovered then
+            cell_fill = {70/255, 70/255, 80/255, 1}
+        else
+            cell_fill = {22/255, 22/255, 28/255, 1}
+        end
+        love.graphics.setColor(cell_fill[1], cell_fill[2], cell_fill[3], cell_fill[4])
+        love.graphics.rectangle('fill', cell_x, cell_y, m.w, row_h)
+
+        -- Left accent bar (vertical stripe, selected only).
+        if is_selected then
+            love.graphics.setColor(skill_point_color[1]/255, skill_point_color[2]/255, skill_point_color[3]/255, 1)
+            love.graphics.rectangle('fill', cell_x - accent_w, cell_y, accent_w, row_h)
+        end
+
+        -- Vertical separator between the index badge and the label.
+        love.graphics.setColor(50/255, 50/255, 50/255, 1)
+        love.graphics.rectangle('line', sep_x, cell_y, 0, row_h)
+
+        local text_y = cell_y + math.floor((row_h - self.font:getHeight())/2)
+
+        -- Index badge "01".."08".
+        local label_r, label_g, label_b, label_a
+        if is_selected then
+            label_r, label_g, label_b = skill_point_color[1]/255, skill_point_color[2]/255, skill_point_color[3]/255
+            label_a = 1
+        elseif is_hovered then
+            label_r, label_g, label_b = 222/255, 222/255, 222/255
+            label_a = 1
+        else
+            label_r, label_g, label_b = default_color[1]/255, default_color[2]/255, default_color[3]/255
+            label_a = 1
+        end
+
+        love.graphics.setColor(label_r, label_g, label_b, label_a)
+        local idx_str = string.format('%02d', i)
+        local idx_w = self.font:getWidth(idx_str)
+        love.graphics.print(idx_str, sep_x - idx_w - 4, text_y)
+
+        -- LABEL — clamped to label_w so it can't bleed into the desc column.
+        love.graphics.setColor(label_r, label_g, label_b, label_a)
+        local label = title.label
+        -- Truncate if necessary (defensive; current labels fit).
+        if self.font:getWidth(label) > label_w - 8 then
+            while self.font:getWidth(label .. '..') > label_w - 8 and #label > 1 do
+                label = label:sub(1, -2)
+            end
+            label = label .. '..'
+        end
+        love.graphics.print(label, label_x, text_y)
+        if is_selected then
+            love.graphics.setColor(label_r, label_g, label_b, 0.55)
+            love.graphics.print(label, label_x + 1, text_y)
+        end
+
+        -- DESCRIPTION (in its own column, capped width).
+        if title.desc then
+            local desc = title.desc
+            local desc_alpha
+            if is_selected then desc_alpha = 0.95
+            elseif is_hovered then desc_alpha = 0.7
+            else desc_alpha = 0.45 end
+            love.graphics.setColor(label_r, label_g, label_b, desc_alpha)
+            -- truncate if too wide
+            if self.font:getWidth(desc) > desc_max_w then
+                while self.font:getWidth(desc .. '..') > desc_max_w and #desc > 1 do
+                    desc = desc:sub(1, -2)
+                end
+                desc = desc .. '..'
+            end
+            love.graphics.print(desc, desc_x, text_y)
+        end
+
+        -- HOTKEY hint "[N]" pinned to the right edge *inside* the cell.
+        local hk = '[' .. i .. ']'
+        local hk_alpha
+        if is_selected then hk_alpha = 1
+        elseif is_hovered then hk_alpha = 0.85
+        else hk_alpha = 0.55 end
+        love.graphics.setColor(label_r, label_g, label_b, hk_alpha)
+        love.graphics.print(hk, hk_x, text_y)
+
+        -- Right-side chevron just *outside* the cell (selected only).
+        if is_selected then
+            love.graphics.setColor(skill_point_color[1]/255, skill_point_color[2]/255, skill_point_color[3]/255, 1)
+            love.graphics.print('›', cell_x + m.w + 4, text_y)
         end
     end
 
-    self:addLine(delay + 0.02, '')
-    self:addLine(delay + 0.04, ';SP: ' .. skill_points .. ',')
-    self:addLine(delay + 0.06, '$CURRENT DEVICE: ' .. device .. '%')
-    self:addLine(delay + 0.08, 'CLASSES: ' .. classes_string) 
-    self:addLine(delay + 0.10, 'LAST SCORE: ' .. score)
-    self:addLine(delay + 0.12, 'HIGH SCORE: ' .. high_score)
-    self:addLine(delay + 0.14, '')
-    self:addLine(delay + 0.16, 'Your objective is to escape this terminal by reaching difficulty 40 and finding all keys.')
-    self:addLine(delay + 0.18, '~ type @escape# to escape')
-    self:addLine(delay + 0.22, '~ type @start# to start the simulation with the current device')
-    self:addLine(delay + 0.24, '~ type @help# to view all builtin commands')
-    self:addLine(delay + 0.26, '~ type @classes# to view the class window')
-    self:addLine(delay + 0.28, '~ type @device# to select a new device')
-    self:addLine(delay + 0.30, '~ type @passives# to view the passive skill tree')
-    self:addLine(delay + 0.32, '~ type @options# to view display / window options')
-    self:addLine(delay + 0.34, '~ type @shutdown# to quit the game')
-    self:addLine(delay + 0.36, '')
-    self:addInputLine(delay + 0.34, '[;root,]arch~ ')
+    love.graphics.setColor(1, 1, 1, 1)
+end
 
-    self.timer:after(delay, function()
-        self.bytepath_main = true
-        self.bytepath_main_active = false
-        self.bytepath_main_selection_index = 1
-        self.bytepath_main_texts = {'escape', 'start', 'help', 'classes', 'device', 'passives', 'options', 'shutdown'}
-        self.bytepath_main_selection_widths = {self.font:getWidth('escape'), self.font:getWidth('start'), self.font:getWidth('help'), self.font:getWidth('classes'), self.font:getWidth('device'), self.font:getWidth('passives'), self.font:getWidth('options'), self.font:getWidth('shutdown')}
-        self.bytepath_main_y = self.line_y + 9*12 - 12
-        self.timer:after(0.30, function() self.bytepath_main_active = true end)
-    end)
+function Console:help()
+    self.main_menu = nil
+    self.input_line = nil
+    table.insert(self.modules, HelpModule(self, self.line_y))
 end
 
 function Console:bytepathIntro()
