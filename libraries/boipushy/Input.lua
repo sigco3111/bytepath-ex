@@ -198,9 +198,13 @@ function Input:down(action, interval, delay)
     elseif action and not interval and not delay then
         for _, key in ipairs(self.binds[action]) do
             -- LÖVE 11.5의 love.keyboard.isDown()은 게임패드 가상 키(dpup 등)나
-            -- 알 수 없는 키 이름을 받으면 "Invalid key constant" 에러를 던진다.
-            -- 키보드/마우스가 이해할 수 있는 키만 isDown에 넘기고, 나머지는 건너뛴다.
-            if Input.keyboard_keys[key] and (love.keyboard.isDown(key) or love.mouse.isDown(key_to_button[key] or 0)) then
+            -- 마우스 버튼(mouse1 등) 이름을 받으면 "Invalid key constant" 에러를
+            -- 던진다. 키보드가 이해할 수 있는 키만 isDown에 넘기고, 마우스 버튼은
+            -- love.mouse.isDown()로만 검사하며, 나머지는 건너뛴다.
+            local mouse_button = key_to_button[key]
+            if mouse_button then
+                if love.mouse.isDown(mouse_button) then return true end
+            elseif Input.keyboard_keys[key] and love.keyboard.isDown(key) then
                 return true
             end
 
