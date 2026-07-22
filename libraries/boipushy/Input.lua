@@ -93,12 +93,12 @@ function Input:bind(key, action)
 end
 
 function Input:pressed(action)
-    if not action or not self.binds[action] then
-        -- No binding registered for this action: nothing pressed, no error.
-    else
-        for _, key in ipairs(self.binds[action]) do
-            if self.state[key] and not self.prev_state[key] then
-                return true
+    if action then
+        if self.binds[action] then
+            for _, key in ipairs(self.binds[action]) do
+                if self.state[key] and not self.prev_state[key] then
+                    return true
+                end
             end
         end
     else
