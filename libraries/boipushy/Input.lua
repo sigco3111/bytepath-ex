@@ -93,13 +93,14 @@ function Input:bind(key, action)
 end
 
 function Input:pressed(action)
-    if action then
+    if not action or not self.binds[action] then
+        -- No binding registered for this action: nothing pressed, no error.
+    else
         for _, key in ipairs(self.binds[action]) do
             if self.state[key] and not self.prev_state[key] then
                 return true
             end
         end
-
     else
         for _, key in ipairs(Input.all_keys) do
             if self.state[key] and not self.prev_state[key] then
@@ -112,6 +113,7 @@ function Input:pressed(action)
 end
 
 function Input:released(action)
+    if not action or not self.binds[action] then return end
     for _, key in ipairs(self.binds[action]) do
         if self.prev_state[key] and not self.state[key] then
             return true
@@ -172,6 +174,7 @@ local gamepad_to_button = {fdown = 'a', fup = 'y', fleft = 'x', fright = 'b', ba
 local axis_to_button = {leftx = 'leftx', lefty = 'lefty', rightx = 'rightx', righty = 'righty', l2 = 'triggerleft', r2 = 'triggerright'}
 
 function Input:down(action, interval, delay)
+    if not action or not self.binds[action] then return end
     if action and delay and interval then
         for _, key in ipairs(self.binds[action]) do
             if self.state[key] and not self.prev_state[key] then
